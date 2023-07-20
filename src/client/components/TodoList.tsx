@@ -1,6 +1,6 @@
-import type { SVGProps } from 'react'
-
+import autoAnimate from '@formkit/auto-animate'
 import * as Checkbox from '@radix-ui/react-checkbox'
+import { useEffect, useRef, type SVGProps } from 'react'
 
 import { api } from '@/utils/client/api'
 
@@ -63,28 +63,70 @@ import { api } from '@/utils/client/api'
  *  - https://auto-animate.formkit.com
  */
 
-export const TodoList = () => {
-  const { data: todos = [] } = api.todo.getAll.useQuery({
-    statuses: ['completed', 'pending'],
+export const TodoList = ({
+  status = 'all',
+}: {
+  status?: 'all' | 'pending' | 'completed'
+}) => {
+  const { data: todos = [], refetch } = api.todo.getAll.useQuery({
+    statuses: status === 'all' ? ['completed', 'pending'] : [status],
   })
+  const { mutateAsync: updateTodoStatus } = api.todoStatus.update.useMutation()
+  const { mutateAsync: deleteTodo } = api.todo.delete.useMutation()
+  const parent = useRef(null)
+
+  useEffect(() => {
+    parent.current && autoAnimate(parent.current)
+  }, [parent])
+
+  useEffect(() => {
+    refetch()
+  }, [status, refetch])
 
   return (
-    <ul className="grid grid-cols-1 gap-y-3">
+    <ul className="grid grid-cols-1 gap-y-3" ref={parent}>
       {todos.map((todo) => (
         <li key={todo.id}>
-          <div className="flex items-center rounded-12 border border-gray-200 px-4 py-3 shadow-sm">
+          <div
+            className={`flex items-center rounded-12 border border-gray-200 px-4 py-3 shadow-sm ${
+              todo.status === 'completed' ? 'bg-gray-50' : ''
+            }`}
+          >
             <Checkbox.Root
               id={String(todo.id)}
               className="flex h-6 w-6 items-center justify-center rounded-6 border border-gray-300 focus:border-gray-700 focus:outline-none data-[state=checked]:border-gray-700 data-[state=checked]:bg-gray-700"
+              onCheckedChange={(checked) => {
+                updateTodoStatus({
+                  todoId: todo.id,
+                  status: checked ? 'completed' : 'pending',
+                }).then(() => refetch())
+              }}
+              defaultChecked={todo.status === 'completed'}
             >
               <Checkbox.Indicator>
                 <CheckIcon className="h-4 w-4 text-white" />
               </Checkbox.Indicator>
             </Checkbox.Root>
 
-            <label className="block pl-3 font-medium" htmlFor={String(todo.id)}>
+            <label
+              className={`block pl-3 font-medium ${
+                todo.status === 'completed' ? 'text-gray-500 line-through' : ''
+              }`}
+              htmlFor={String(todo.id)}
+            >
               {todo.body}
             </label>
+
+            <button
+              onClick={() => {
+                deleteTodo({
+                  id: todo.id,
+                }).then(() => refetch())
+              }}
+              className="ml-auto"
+            >
+              <XMarkIcon className="h-6 w-6" />
+            </button>
           </div>
         </li>
       ))}
